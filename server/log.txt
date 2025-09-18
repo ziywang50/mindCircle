@@ -1,0 +1,5 @@
+Loading tokenizer and base model: lzw1008/Emollama-7b on cuda
+INFO:     127.0.0.1:56740 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56740 - "GET /openapi.json HTTP/1.1" 200 OK
+Summarization failed: The following `model_kwargs` are not used by the model: ['prompt'] (note: typos in the generate arguments will also show up in this list)
+INFO:     127.0.0.1:58856 - "POST /generate HTTP/1.1" 200 OK

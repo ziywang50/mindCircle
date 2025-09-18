@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+torch
+transformers
+accelerate
+safetensors
+bitsandbytes
+peft
+sentencepiece
+mem0ai
