@@ -1,6 +1,7 @@
 import os
 import time
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from collections import defaultdict, deque
 from typing import Dict, Deque, Tuple, Optional, List, Any
@@ -48,6 +49,16 @@ class MindCircleApp:
 
     def __init__(self):
         self.app = FastAPI(title="mindCircle EmolLama API")
+        
+        # Add CORS middleware
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],  # Allows all origins
+            allow_credentials=True,
+            allow_methods=["*"],  # Allows all methods
+            allow_headers=["*"],  # Allows all headers
+        )
+        
         self.model: Optional[EmolLamaModel] = None
         # self.context_manager: Optional[ContextManager] = None
         
@@ -67,7 +78,8 @@ class MindCircleApp:
         
         # Initialize model with logging
         base = os.environ.get("BASE_MODEL", "lzw1008/Emollama-7b")
-        adapter_path = os.environ.get("ADAPTER_PATH", "")
+        default_adapter = "/workspace/emollama_finetune/emollama-mental-health-lora_latest"
+        adapter_path = os.environ.get("ADAPTER_PATH", default_adapter)
         
         print(f"Loading base model from: {base}")
         if adapter_path:
@@ -81,6 +93,9 @@ class MindCircleApp:
         self.model = EmolLamaModel(base_model=base, adapter_path=adapter_path, device=device)
         try:
             self.model.load()
+            time.sleep(5)
+            if self.model is None:
+                raise RuntimeError("Model failed to load.")
             # Verify model loaded
             test_output = self.model.generate("Test: Are you ready to help? Counselor:", max_tokens=10)
             print(f"Model test output: {test_output}")
@@ -94,12 +109,12 @@ class MindCircleApp:
         if self.model is None:
             raise HTTPException(status_code=503, detail="Model not loaded")
         
-        try:
-            t0 = time.time()
-            
+        try:            
             t1 = time.time()
+            INSTRUCTION = """You are a helpful mental health counselling assistant, please answer the mental health questions based on the patient's description. 
+The assistant gives helpful, comprehensive, and appropriate answers to the user's questions."""
 
-            enhanced_prompt = f"""User: {req.prompt.strip()} 
+            enhanced_prompt = f"""{INSTRUCTION}\n User: {req.prompt.strip()} 
             Assistant:"""
 
             t4 = time.time()
@@ -113,9 +128,6 @@ class MindCircleApp:
 
             # Update conversation context
             # No context management
-            t7 = time.time()
-            print(f"Context update took: {t7-t6:.2f}s")
-            
             return {"text": out}
             
         except Exception as e:
