@@ -30,14 +30,21 @@ class EmolLamaModel:
         try:
             # prefer bf16 if available
             dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-        except Exception:
-            dtype = torch.float16
-        self.model = LLM(
+            self.model = LLM(
             model=self.base_model,
             tokenizer=self.base_model,
             enable_lora=bool(self.adapter_path),
             dtype=dtype,
             gpu_memory_utilization=0.5
+        )
+        except Exception:
+            dtype = torch.float16
+            self.model = LLM(
+            model=self.base_model,
+            tokenizer=self.base_model,
+            enable_lora=bool(self.adapter_path),
+            dtype=dtype,
+            gpu_memory_utilization=0.8
         )
 
 
@@ -86,4 +93,15 @@ class EmolLamaModel:
         )'''
     
         generated_text = outputs[0].outputs[0].text
+        # Find last complete sentence
+        if '.' in generated_text:
+            # Split by period
+            sentences = generated_text.split('.')
+            
+            # Keep all complete sentences
+            # (last element after split is either empty or incomplete)
+            complete_sentences = [s.strip() for s in sentences[:-1] if s.strip()]
+            
+            if complete_sentences:
+                generated_text = '. '.join(complete_sentences) + '.'
         return generated_text.strip()

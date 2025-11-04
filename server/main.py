@@ -16,7 +16,7 @@ class GenRequest(BaseModel):
     temperature: float = 0.7
 
 class ContextManager:
-    def __init__(self, max_messages: int=10):
+    def __init__(self, max_messages: int=3):
         self.contexts: Dict[str, Deque[Tuple[str, str]]] = defaultdict(
             lambda: deque(maxlen=max_messages)
         )
@@ -26,7 +26,7 @@ class ContextManager:
 
     def get_recent(self, user_id:str)-> str:
         if not self.contexts[user_id]:
-            return ""
+            return "No past memories"
         context = []
         for prompt, response in self.contexts[user_id]:
             context.extend([
@@ -60,7 +60,7 @@ class MindCircleApp:
         )
         
         self.model: Optional[EmolLamaModel] = None
-        # self.context_manager: Optional[ContextManager] = None
+        self.context_manager: Optional[ContextManager] = None
         
         # Register routes with timing wrapper
         self.app.post("/generate")(self.log_time(self.generate))
@@ -74,7 +74,7 @@ class MindCircleApp:
 
     async def startup_event(self):
         """Initialize all components on startup."""
-        # self.context_manager = ContextManager(max_messages=5)
+        self.context_manager = ContextManager(max_messages=5)
         
         # Initialize model with logging
         base = os.environ.get("BASE_MODEL", "lzw1008/Emollama-7b")
@@ -114,17 +114,28 @@ class MindCircleApp:
             INSTRUCTION = """You are a helpful mental health counselling assistant, please answer the mental health questions based on the patient's description. 
 The assistant gives helpful, comprehensive, and appropriate answers to the user's questions."""
 
-            enhanced_prompt = f"""{INSTRUCTION}\n User: {req.prompt.strip()} 
-            Assistant:"""
+            past = self.context_manager.get_recent(req.user_id)
+            if past != "No past memories":
+                conversation_history = f"""[Conversation History]: 
+{past}
 
-            t4 = time.time()
-            print(f"Prompt preparation took: {t4-t1:.2f}s")
+[Current Question]: """
+            else:
+                conversation_history = ""
+            enhanced_prompt = f"""{INSTRUCTION}
+{conversation_history}
+User: {req.prompt.strip()}
+Assistant:"""
+
+            t2 = time.time()
+            print(f"Prompt preparation took: {t2-t1:.2f}s")
 
             # Generate
-            t5 = time.time()
+            t3 = time.time()
             out = self.model.generate(enhanced_prompt, max_tokens=req.max_tokens, temperature=req.temperature)
-            t6 = time.time()
-            print(f"Model generation took: {t6-t5:.2f}s")
+            self.context_manager.add_exchange(req.user_id, req.prompt.strip(), out)
+            t4 = time.time()
+            print(f"Model generation took: {t4-t3:.2f}s")
 
             # Update conversation context
             # No context management
