@@ -78,7 +78,7 @@ class MindCircleApp:
         
         # Initialize model with logging
         base = os.environ.get("BASE_MODEL", "lzw1008/Emollama-7b")
-        default_adapter = "/workspace/emollama_finetune/emollama-mental-health-lora_latest"
+        default_adapter = "/root/autodl-tmp/mindCircle/emollama-mental-health-lora_latest"
         adapter_path = os.environ.get("ADAPTER_PATH", default_adapter)
         
         print(f"Loading base model from: {base}")
