@@ -30,7 +30,7 @@ class ContextManager:
 
     def get_recent(self, user_id:str)-> str:
         if not self.contexts[user_id]:
-            return "No past memories"
+            return ""
         context = []
         for prompt, response in self.contexts[user_id]:
             context.extend([
@@ -71,7 +71,7 @@ class MindCircleApp:
         self.app.post("/generate")(self.log_time(self.generate))
         self.app.get("/health")(self.health)
         self.app.on_event("startup")(self.startup_event)
-        self.app.get("/memory/search")(self.search_memory)
+        self.app.post("/memory/search")(self.search_memory)
 
     def extract_important_detail(self, response: str, max_len: int = 100) -> str:
         """Extract first meaningful sentence as key information."""
@@ -82,7 +82,7 @@ class MindCircleApp:
         """Initialize all components on startup."""
         self.context_manager = ContextManager(max_messages=5)
         try:
-            self.memory = AsyncMemory()
+            self.async_memory = AsyncMemory()
         except Exception as e:
             print(f"! Mem0 disabled: {e}")
         
@@ -126,7 +126,7 @@ class MindCircleApp:
 The assistant gives helpful, comprehensive, and appropriate answers to the user's questions."""
 
             past = self.context_manager.get_recent(req.user_id)
-            if past != "No past memories":
+            if past:
                 conversation_history = f"""[Conversation History]: 
 {past}
 
@@ -149,19 +149,20 @@ Assistant:"""
             print(f"Model generation took: {t2-t1:.2f}s")
 
             # Update conversation memory
-            try:
-                t1 = time.time()
-                result = await self.memory.add(
-                    messages=[
-                        {"role": "user", "content": prompt},
-                        {"role": "assistant", "content": out}
-                    ],
-                    user_id=req.user_id
-                )
-                t2 = time.time()
-                print(f"Memory update took: {t2-t1:.2f}s")
-            except Exception as e:
-                print("Skipping memory update due to error": {e})
+            if self.async_memory:
+                try:
+                    t1 = time.time()
+                    result = await self.async_memory.add(
+                        messages=[
+                            {"role": "user", "content": prompt},
+                            {"role": "assistant", "content": out}
+                        ],
+                        user_id=req.user_id
+                    )
+                    t2 = time.time()
+                    print(f"Memory update took: {t2-t1:.2f}s")
+                except Exception as e:
+                    print(f"Skipping memory update due to error: {e}")
             return {"text": out}
             
         except Exception as e:
@@ -172,7 +173,7 @@ Assistant:"""
         return {"status": "ok", "loaded": self.model is not None}
     
     async def search_memory(self, req: SearchQuery):
-        return self.memory.search(query=req.query, user_id=req.user_id)
+        return self.async_memory.search(query=req.query, user_id=req.user_id)
 
 
 mindcircle = MindCircleApp()
