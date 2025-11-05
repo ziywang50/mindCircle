@@ -1,19 +1,23 @@
 import os
 import time
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from collections import defaultdict, deque
 from typing import Dict, Deque, Tuple, Optional, List, Any
 from functools import wraps
 from model import EmolLamaModel
-from transformers import pipeline
+from mem0 import AsyncMemory
 
 class GenRequest(BaseModel):
     user_id: str
     prompt: str
     max_tokens: int = 256
     temperature: float = 0.7
+
+class SearchQuery(BaseModel):
+    user_id: str
+    query: str
 
 class ContextManager:
     def __init__(self, max_messages: int=3):
@@ -61,11 +65,13 @@ class MindCircleApp:
         
         self.model: Optional[EmolLamaModel] = None
         self.context_manager: Optional[ContextManager] = None
+        self.async_memory: Optional[AsyncMemory] = None
         
         # Register routes with timing wrapper
         self.app.post("/generate")(self.log_time(self.generate))
         self.app.get("/health")(self.health)
         self.app.on_event("startup")(self.startup_event)
+        self.app.get("/memory/search")(self.search_memory)
 
     def extract_important_detail(self, response: str, max_len: int = 100) -> str:
         """Extract first meaningful sentence as key information."""
@@ -75,6 +81,10 @@ class MindCircleApp:
     async def startup_event(self):
         """Initialize all components on startup."""
         self.context_manager = ContextManager(max_messages=5)
+        try:
+            self.memory = AsyncMemory()
+        except Exception as e:
+            print(f"! Mem0 disabled: {e}")
         
         # Initialize model with logging
         base = os.environ.get("BASE_MODEL", "lzw1008/Emollama-7b")
@@ -110,6 +120,7 @@ class MindCircleApp:
             raise HTTPException(status_code=503, detail="Model not loaded")
         
         try:            
+            prompt = req.prompt.strip()
             t1 = time.time()
             INSTRUCTION = """You are a helpful mental health counselling assistant, please answer the mental health questions based on the patient's description. 
 The assistant gives helpful, comprehensive, and appropriate answers to the user's questions."""
@@ -124,21 +135,33 @@ The assistant gives helpful, comprehensive, and appropriate answers to the user'
                 conversation_history = ""
             enhanced_prompt = f"""{INSTRUCTION}
 {conversation_history}
-User: {req.prompt.strip()}
+User: {prompt}
 Assistant:"""
 
             t2 = time.time()
             print(f"Prompt preparation took: {t2-t1:.2f}s")
 
             # Generate
-            t3 = time.time()
+            t1 = time.time()
             out = self.model.generate(enhanced_prompt, max_tokens=req.max_tokens, temperature=req.temperature)
-            self.context_manager.add_exchange(req.user_id, req.prompt.strip(), out)
-            t4 = time.time()
-            print(f"Model generation took: {t4-t3:.2f}s")
+            self.context_manager.add_exchange(req.user_id, prompt, out)
+            t2 = time.time()
+            print(f"Model generation took: {t2-t1:.2f}s")
 
-            # Update conversation context
-            # No context management
+            # Update conversation memory
+            try:
+                t1 = time.time()
+                result = await self.memory.add(
+                    messages=[
+                        {"role": "user", "content": prompt},
+                        {"role": "assistant", "content": out}
+                    ],
+                    user_id=req.user_id
+                )
+                t2 = time.time()
+                print(f"Memory update took: {t2-t1:.2f}s")
+            except Exception as e:
+                print("Skipping memory update due to error": {e})
             return {"text": out}
             
         except Exception as e:
@@ -147,6 +170,10 @@ Assistant:"""
     async def health(self):
         """Health check endpoint."""
         return {"status": "ok", "loaded": self.model is not None}
+    
+    async def search_memory(self, req: SearchQuery):
+        return self.memory.search(query=req.query, user_id=req.user_id)
+
 
 mindcircle = MindCircleApp()
 app = mindcircle.app  # This is what uvicorn will import
