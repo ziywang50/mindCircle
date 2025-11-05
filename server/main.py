@@ -124,7 +124,7 @@ class MindCircleApp:
             t1 = time.time()
             INSTRUCTION = """You are a helpful mental health counselling assistant, please answer the mental health questions based on the patient's description. 
 The assistant gives helpful, comprehensive, and appropriate answers to the user's questions.
-IMPORTANT: Provide ONLY ONE response. Do NOT generate follow-up questions or continue the conversation. Stop after your single response."""
+IMPORTANT: Provide ONLY ONE response to current question."""
 
             past = self.context_manager.get_recent(req.user_id)
             if past:
