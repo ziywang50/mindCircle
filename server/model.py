@@ -65,7 +65,8 @@ class EmolLamaModel:
             top_p = 0.9,
             top_k = 50,
             repetition_penalty = 1.1,
-            max_tokens = max_tokens
+            max_tokens = max_tokens,
+            stop=["\nUser:", "\nuser:", "\n\nUser:", "\nAssistant:", " User:"]
         )
         
         #input_length = inputs['input_ids'].shape[1]
